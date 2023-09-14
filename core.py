@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from time import time
+from typing import Tuple
 
 def load_pair():
     global w3
@@ -18,21 +19,20 @@ def load_pair():
 
     return contract
 
-
-def get_decimals(address):
-    abi=requests.get(f"https://api.snowtrace.io/api?module=contract&action=getabi&address={Web3.toChecksumAddress(address)}").json()['result']
+def get_decimals(address) -> int:
+    abi=requests.get(f"https://api.snowtrace.io/api?module=contract&action=getabi&address={Web3.to_checksum_address(address)}").json()['result']
 
     contract = w3.eth.contract(address=address, abi=abi)
     return contract.functions.decimals().call()
 
 
-def get_tokens(contract):
+def get_tokens(contract) -> Tuple[str, str]:
     tokenX = contract.functions.getTokenX().call()
     tokenY = contract.functions.getTokenY().call()
 
     return tokenX, tokenY
 
-def get_target_bins(contract, offset=250):
+def get_target_bins(contract, offset: int = 10) -> Tuple[list, int]:
     # We start by finding the current "active" bin and then find all bins with liquidity to the left and to the right
     active_bin = contract.functions.getActiveId().call()
     left_bins = [contract.functions.getNextNonEmptyBin(True, active_bin).call()]
@@ -56,9 +56,9 @@ def get_target_bins(contract, offset=250):
         else:
             right_bins.append(next_bin) 
     
-    return left_bins + right_bins
+    return left_bins + [active_bin] + right_bins, active_bin
 
-def get_liquidity_shape(contract, target_bins):
+def get_liquidity_shape(contract, target_bins: list) -> list:
     data = []
     bin_step = 0.002
 
@@ -70,9 +70,11 @@ def get_liquidity_shape(contract, target_bins):
         bin_price = (1+bin_step)**(bin-2**23)
         data.append({"bin_id" : bin, "reserveX" : reserveX, "reserveY" : reserveY, "bin_price" : bin_price})
 
+    print("Liquidity shape retrieved")
+
     return data
 
-def process_data(data, timestamp, min=5, max=20):
+def process_data(data: list, timestamp: int, min: int = 5, max: int = 20) -> pd.DataFrame:
     df = pd.DataFrame.from_dict(data)
     df.set_index('bin_id')
 
@@ -85,10 +87,14 @@ def process_data(data, timestamp, min=5, max=20):
     df["reserveX_in_Y"] = df['reserveX'] * df['bin_price']
 
     df = df[(df.bin_price > min) & (df.bin_price < max)]
-    df.to_csv(f'outputs/csvs/lb_avax_usdc_{timestamp}.csv') 
+    path = f'outputs/csvs/lb_avax_usdc_{timestamp}.csv'
+    df.to_csv(path) 
+
+    print(f"Dataframe processed and saved to {path}")
+
     return df
 
-def draw_the_book(df, timestamp):
+def draw_the_book(df: pd.DataFrame, timestamp: int, active_bin: int) -> None:
     tick_gap = 10
 
     tokenX_symbol = "AVAX"
@@ -111,16 +117,16 @@ def draw_the_book(df, timestamp):
     fig.set_size_inches(18.5, 10.5, forward=True)
     ax.set_xticks(xticks)
     ax.set_xticklabels(np.round(xtick_lables, 4), rotation=90)
-    # plt.xticks(xticks, rotation=90)
+    ax.axvline(x=active_bin, color='red', linestyle='--', label='Current Price')
 
     plt.savefig(f'outputs/images/lb_avax_usdc_{timestamp}.png')
 
 if __name__ == "__main__":
     contract = load_pair()
     tokenX, tokenY = get_tokens(contract)
-    target_bins = get_target_bins(contract)
+    target_bins, active_bin = get_target_bins(contract)
 
     timestamp = int(time())
     data = get_liquidity_shape(contract, target_bins)
     df = process_data(data, timestamp)
-    draw_the_book(df, timestamp)
+    draw_the_book(df, timestamp, active_bin)
