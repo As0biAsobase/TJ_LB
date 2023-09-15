@@ -5,6 +5,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from time import time
 from typing import Tuple
+import multiprocessing
+import os
 
 def load_pair():
     global w3
@@ -26,13 +28,13 @@ def get_decimals(address) -> int:
     return contract.functions.decimals().call()
 
 
-def get_tokens(contract) -> Tuple[str, str]:
+def get_tokens() -> Tuple[str, str]:
     tokenX = contract.functions.getTokenX().call()
     tokenY = contract.functions.getTokenY().call()
 
     return tokenX, tokenY
 
-def get_target_bins(contract, offset: int = 10) -> Tuple[list, int]:
+def get_target_bins(offset: int = 10) -> Tuple[list, int]:
     # We start by finding the current "active" bin and then find all bins with liquidity to the left and to the right
     active_bin = contract.functions.getActiveId().call()
     left_bins = [contract.functions.getNextNonEmptyBin(True, active_bin).call()]
@@ -58,7 +60,7 @@ def get_target_bins(contract, offset: int = 10) -> Tuple[list, int]:
     
     return left_bins + [active_bin] + right_bins, active_bin
 
-def get_liquidity_shape(contract, target_bins: list) -> list:
+def get_liquidity_shape(target_bins: list) -> list:
     data = []
     bin_step = 0.002
 
@@ -74,7 +76,20 @@ def get_liquidity_shape(contract, target_bins: list) -> list:
 
     return data
 
-def process_data(data: list, timestamp: int, min: int = 5, max: int = 20) -> pd.DataFrame:
+def process_bin(bin, contract):
+    bin_step = 0.002
+    reserveX, reserveY = contract.functions.getBin(bin).call()
+    bin_price = (1+bin_step)**(bin-2**23)
+    print(bin, end="\r")
+    return {"bin_id" : bin, "reserveX" : reserveX, "reserveY" : reserveY, "bin_price" : bin_price}
+
+def get_liquidity_shape_parallel(target_bins: list) -> list:
+    with multiprocessing.Pool(processes=os.cpu_count()) as pool:
+        results = pool.map(process_bin, target_bins)
+
+    return results
+
+def process_data(data: list, timestamp: int, min: int = 7.5, max: int = 12.5) -> pd.DataFrame:
     df = pd.DataFrame.from_dict(data)
     df.set_index('bin_id')
 
@@ -122,11 +137,20 @@ def draw_the_book(df: pd.DataFrame, timestamp: int, active_bin: int) -> None:
     plt.savefig(f'outputs/images/lb_avax_usdc_{timestamp}.png')
 
 if __name__ == "__main__":
+    global contract
     contract = load_pair()
-    tokenX, tokenY = get_tokens(contract)
-    target_bins, active_bin = get_target_bins(contract)
+    tokenX, tokenY = get_tokens()
+    target_bins, active_bin = get_target_bins()
 
     timestamp = int(time())
-    data = get_liquidity_shape(contract, target_bins)
+
+    start = int(time())
+    data = get_liquidity_shape(target_bins[:5])
+    print(f"Time taken non-parallel: {int(time())-start} seconds")
+
+    start = int(time())
+    data = get_liquidity_shape_parallel(target_bins[:5])
+    print(f"Time taken parallel: {int(time())-start} seconds")
+
     df = process_data(data, timestamp)
     draw_the_book(df, timestamp, active_bin)
