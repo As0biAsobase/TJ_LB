@@ -34,7 +34,7 @@ def get_tokens() -> Tuple[str, str]:
 
     return tokenX, tokenY
 
-def get_target_bins(offset: int = 10) -> Tuple[list, int]:
+def get_target_bins(offset: int = 200) -> Tuple[list, int]:
     # We start by finding the current "active" bin and then find all bins with liquidity to the left and to the right
     active_bin = contract.functions.getActiveId().call()
     left_bins = [contract.functions.getNextNonEmptyBin(True, active_bin).call()]
@@ -76,7 +76,7 @@ def get_liquidity_shape(target_bins: list) -> list:
 
     return data
 
-def process_bin(bin, contract):
+def process_bin(bin):
     bin_step = 0.002
     reserveX, reserveY = contract.functions.getBin(bin).call()
     bin_price = (1+bin_step)**(bin-2**23)
@@ -145,12 +145,8 @@ if __name__ == "__main__":
     timestamp = int(time())
 
     start = int(time())
-    data = get_liquidity_shape(target_bins[:5])
-    print(f"Time taken non-parallel: {int(time())-start} seconds")
-
-    start = int(time())
-    data = get_liquidity_shape_parallel(target_bins[:5])
-    print(f"Time taken parallel: {int(time())-start} seconds")
+    data = get_liquidity_shape_parallel(target_bins)
+    print(f"Time taken in parallel: {int(time())-start} seconds")
 
     df = process_data(data, timestamp)
     draw_the_book(df, timestamp, active_bin)
