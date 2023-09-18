@@ -1,12 +1,19 @@
+import os, sys, signal, multiprocessing, requests, argparse
+import time, datetime
+from pathlib import Path
 from web3 import Web3
-import requests
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from time import time
 from typing import Tuple
-import multiprocessing
-import os
+
+def exit_handler(signal, frame):
+    print("\nprogram exiting gracefully")
+    sys.exit(0)
+
+def create_folders() -> None:
+    Path("./outputs/csvs").mkdir(parents=True, exist_ok=True)
+    Path("./outputs/images").mkdir(parents=True, exist_ok=True)
 
 def load_pair():
     global w3
@@ -26,7 +33,6 @@ def get_decimals(address) -> int:
 
     contract = w3.eth.contract(address=address, abi=abi)
     return contract.functions.decimals().call()
-
 
 def get_tokens() -> Tuple[str, str]:
     tokenX = contract.functions.getTokenX().call()
@@ -80,16 +86,18 @@ def process_bin(bin):
     bin_step = 0.002
     reserveX, reserveY = contract.functions.getBin(bin).call()
     bin_price = (1+bin_step)**(bin-2**23)
-    print(bin, end="\r")
+    print(f"Processing {bin}", end="\r")
     return {"bin_id" : bin, "reserveX" : reserveX, "reserveY" : reserveY, "bin_price" : bin_price}
 
 def get_liquidity_shape_parallel(target_bins: list) -> list:
-    with multiprocessing.Pool(processes=os.cpu_count()) as pool:
+    corecount = os.cpu_count()
+    print(f"Getting liquidity shape, using {corecount} threads")
+    with multiprocessing.Pool(processes=corecount) as pool:
         results = pool.map(process_bin, target_bins)
 
     return results
 
-def process_data(data: list, timestamp: int, min: int = 7.5, max: int = 12.5) -> pd.DataFrame:
+def process_data(data: list, timestamp: int, min: int = 7, max: int = 12) -> pd.DataFrame:
     df = pd.DataFrame.from_dict(data)
     df.set_index('bin_id')
 
@@ -114,6 +122,8 @@ def draw_the_book(df: pd.DataFrame, timestamp: int, active_bin: int) -> None:
 
     tokenX_symbol = "AVAX"
     tokenY_symbol = "USDC"
+    dt = datetime.datetime.utcfromtimestamp(timestamp)
+    label = f"{tokenX_symbol}-{tokenY_symbol} pair on {dt:%Y-%m-%d %H:%M:%S}"
 
     xticks = df.bin_id[::tick_gap]
     xtick_lables = df.bin_price[::tick_gap]
@@ -125,7 +135,7 @@ def draw_the_book(df: pd.DataFrame, timestamp: int, active_bin: int) -> None:
 
     ax.set_ylabel('Reserves ($)')
     ax.set_xlabel('Price ($)')
-    ax.set_title('LIquidity distribution per bin')
+    ax.set_title(label)
     ax.legend()
 
     ax.ticklabel_format(style='plain', useOffset=False)
@@ -136,17 +146,36 @@ def draw_the_book(df: pd.DataFrame, timestamp: int, active_bin: int) -> None:
 
     plt.savefig(f'outputs/images/lb_avax_usdc_{timestamp}.png')
 
+signal.signal(signal.SIGINT, exit_handler)
+
 if __name__ == "__main__":
     global contract
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--oneshot", help="Create a one-shot snapshot of liquidity and exit", action="store_true")
+    args = parser.parse_args()
+    one_shot = args.oneshot
+    if one_shot: print("Running in one-shot mode")
+
+    create_folders()
+
+    print("Starting the execution...")
     contract = load_pair()
     tokenX, tokenY = get_tokens()
-    target_bins, active_bin = get_target_bins()
 
-    timestamp = int(time())
+    print("Main loop started, snaphoting every 15 minutes")
+    while True:
+        if (time.localtime().tm_min % 15 == 0 and time.localtime().tm_sec == 0) or one_shot == True:
+            timestamp = int(time.time())
+            target_bins, active_bin = get_target_bins()
 
-    start = int(time())
-    data = get_liquidity_shape_parallel(target_bins)
-    print(f"Time taken in parallel: {int(time())-start} seconds")
+            start = int(time.time())
+            data = get_liquidity_shape_parallel(target_bins)
 
-    df = process_data(data, timestamp)
-    draw_the_book(df, timestamp, active_bin)
+            df = process_data(data, timestamp)
+            draw_the_book(df, timestamp, active_bin)
+            print(f"Snaphot for {timestamp} taken, see you in a bit!")
+
+            if one_shot: break
+        time.sleep(0.1)
+
