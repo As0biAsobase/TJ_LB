@@ -1,4 +1,4 @@
-import os, sys, signal, multiprocessing, requests, argparse
+import os, sys, signal, multiprocessing, requests, argparse, logging
 import time, datetime
 from pathlib import Path
 from web3 import Web3
@@ -8,12 +8,13 @@ import matplotlib.pyplot as plt
 from typing import Tuple
 
 def exit_handler(signal, frame):
-    print("\nprogram exiting gracefully")
+    print("\nKeyboard Interrupt, program exiting gracefully")
     sys.exit(0)
 
 def create_folders() -> None:
     Path("./outputs/csvs").mkdir(parents=True, exist_ok=True)
     Path("./outputs/images").mkdir(parents=True, exist_ok=True)
+    Path("./logs").mkdir(parents=True, exist_ok=True)
 
 def load_pair():
     global w3
@@ -127,6 +128,7 @@ def draw_the_book(df: pd.DataFrame, timestamp: int, active_bin: int) -> None:
 
     xticks = df.bin_id[::tick_gap]
     xtick_lables = df.bin_price[::tick_gap]
+    yticks = [i*10_000 for i in range(0, 21)]
 
     fig, ax = plt.subplots()
 
@@ -142,6 +144,7 @@ def draw_the_book(df: pd.DataFrame, timestamp: int, active_bin: int) -> None:
     fig.set_size_inches(18.5, 10.5, forward=True)
     ax.set_xticks(xticks)
     ax.set_xticklabels(np.round(xtick_lables, 4), rotation=90)
+    ax.set_yticks(yticks)
     ax.axvline(x=active_bin, color='red', linestyle='--', label='Current Price')
 
     plt.savefig(f'outputs/images/lb_avax_usdc_{timestamp}.png')
@@ -151,31 +154,39 @@ signal.signal(signal.SIGINT, exit_handler)
 if __name__ == "__main__":
     global contract
 
+    create_folders()
+    logging.basicConfig(filename='./logs/nestor_all.log', level=logging.DEBUG)
+    logging.basicConfig(filename='./logs/nestor_core.log', level=logging.INFO)
+    
     parser = argparse.ArgumentParser()
     parser.add_argument("--oneshot", help="Create a one-shot snapshot of liquidity and exit", action="store_true")
     args = parser.parse_args()
     one_shot = args.oneshot
-    if one_shot: print("Running in one-shot mode")
-
-    create_folders()
 
     print("Starting the execution...")
     contract = load_pair()
     tokenX, tokenY = get_tokens()
 
-    print("Main loop started, snaphoting every 15 minutes")
+    if one_shot: print("Running in one-shot mode")
+    else: print("Main loop started, snaphoting every 15 minutes")
+    
     while True:
         if (time.localtime().tm_min % 15 == 0 and time.localtime().tm_sec == 0) or one_shot == True:
-            timestamp = int(time.time())
-            target_bins, active_bin = get_target_bins()
+            try:
+                timestamp = int(time.time())
+                target_bins, active_bin = get_target_bins()
 
-            start = int(time.time())
-            data = get_liquidity_shape_parallel(target_bins)
+                start = int(time.time())
+                data = get_liquidity_shape_parallel(target_bins)
 
-            df = process_data(data, timestamp)
-            draw_the_book(df, timestamp, active_bin)
-            print(f"Snaphot for {timestamp} taken, see you in a bit!")
-
+                df = process_data(data, timestamp)
+                draw_the_book(df, timestamp, active_bin)
+                
+                print(f"Snaphot - {timestamp} completed in {int(time.time())-start}s")
+                logging.info(f"{datetime.datetime.utcnow()}: Snaphot - {timestamp} completed in {int(time.time())-start}s")
+            except:
+                logging.error(f"{datetime.datetime.utcnow()}: Couldn't complete a snapshot")
+                time.sleep(1)
             if one_shot: break
         time.sleep(0.1)
 
