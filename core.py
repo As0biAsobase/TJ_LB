@@ -1,4 +1,4 @@
-import os, sys, signal, multiprocessing, requests, argparse, logging
+import os, sys, multiprocessing, requests, argparse, logging, json
 import time, datetime
 from pathlib import Path
 from web3 import Web3
@@ -6,17 +6,21 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from typing import Tuple
+from signal import signal, SIGPIPE, SIG_DFL
+
 
 def exit_handler(signal, frame):
     print("\nKeyboard Interrupt, program exiting gracefully")
     sys.exit(0)
 
+signal(signal.SIGINT, exit_handler)
+signal(SIGPIPE,SIG_DFL) # Ignore broken pipe
 def create_folders() -> None:
     Path("./outputs/csvs").mkdir(parents=True, exist_ok=True)
     Path("./outputs/images").mkdir(parents=True, exist_ok=True)
     Path("./logs").mkdir(parents=True, exist_ok=True)
 
-def load_pair():
+def load_pair(address: str):
     global w3
     w3 = Web3(Web3.HTTPProvider("https://api.avax.network/ext/bc/C/rpc"))
 
@@ -24,15 +28,23 @@ def load_pair():
     abi=requests.get(f"https://api.snowtrace.io/api?module=contract&action=getabi&address={lb_impl}").json()['result']
 
     # Each pair is deployed as a proxy contract, so we get ABI from implementation, but interact with the proxy itself
-    lb_proxy = Web3.to_checksum_address("0xD446eb1660F766d533BeCeEf890Df7A69d26f7d1")
+    lb_proxy = Web3.to_checksum_address(address)
     contract = w3.eth.contract(address=lb_proxy, abi=abi)
 
     return contract
 
 def get_decimals(address) -> int:
-    abi=requests.get(f"https://api.snowtrace.io/api?module=contract&action=getabi&address={Web3.to_checksum_address(address)}").json()['result']
-
+    address = Web3.to_checksum_address(address)
+    abi=requests.get(f"https://api.snowtrace.io/api?module=contract&action=getabi&address={address}").json()['result']
     contract = w3.eth.contract(address=address, abi=abi)
+
+    # if token is using proxy pattern, try to detect and adjust for it (this won't catch all implementations)
+    if json.loads(abi)[0]["inputs"][0]['name'] == "implementationContract":
+        time.sleep(5) # Another necessary step to avoid being rate limited
+        impl_address = contract.functions.implementation().call()
+        abi=requests.get(f"https://api.snowtrace.io/api?module=contract&action=getabi&address={Web3.to_checksum_address(impl_address)}").json()['result']
+        contract = w3.eth.contract(address=address, abi=abi)
+
     return contract.functions.decimals().call()
 
 def get_tokens() -> Tuple[str, str]:
@@ -98,12 +110,9 @@ def get_liquidity_shape_parallel(target_bins: list) -> list:
 
     return results
 
-def process_data(data: list, timestamp: int, min: int = 7, max: int = 12) -> pd.DataFrame:
+def process_data(data: list, timestamp: int, min: int = 7, max: int = 12, tokenX_decimals: int = 18, tokenY_decimals: int = 6) -> pd.DataFrame:
     df = pd.DataFrame.from_dict(data)
     df.set_index('bin_id')
-
-    tokenX_decimals = 18
-    tokenY_decimals = 6
 
     df['reserveX'] = df['reserveX'].div(10**tokenX_decimals)
     df['reserveY'] = df['reserveY'].div(10**tokenY_decimals) 
@@ -149,23 +158,28 @@ def draw_the_book(df: pd.DataFrame, timestamp: int, active_bin: int) -> None:
 
     plt.savefig(f'outputs/images/lb_avax_usdc_{timestamp}.png')
 
-signal.signal(signal.SIGINT, exit_handler)
-
 if __name__ == "__main__":
     global contract
 
     create_folders()
-    logging.basicConfig(filename='./logs/nestor_all.log', level=logging.DEBUG)
     logging.basicConfig(filename='./logs/nestor_core.log', level=logging.INFO)
     
     parser = argparse.ArgumentParser()
     parser.add_argument("--oneshot", help="Create a one-shot snapshot of liquidity and exit", action="store_true")
+    parser.add_argument("--address", help="Address of the LP pair", default="0xD446eb1660F766d533BeCeEf890Df7A69d26f7d1")
     args = parser.parse_args()
     one_shot = args.oneshot
+    address = args.address
 
     print("Starting the execution...")
-    contract = load_pair()
+    contract = load_pair(address)
     tokenX, tokenY = get_tokens()
+
+    # Need to delay before calling get_decimals otherwise, API gets rete limited
+    time.sleep(5)
+    decimalsX = get_decimals(tokenX)
+    time.sleep(5)
+    decimalsY = get_decimals(tokenY)
 
     if one_shot: print("Running in one-shot mode")
     else: print("Main loop started, snaphoting every 15 minutes")
@@ -179,7 +193,7 @@ if __name__ == "__main__":
                 start = int(time.time())
                 data = get_liquidity_shape_parallel(target_bins)
 
-                df = process_data(data, timestamp)
+                df = process_data(data, timestamp, tokenX_decimals=decimalsX, tokenY_decimals=decimalsY)
                 draw_the_book(df, timestamp, active_bin)
                 
                 print(f"Snaphot - {timestamp} completed in {int(time.time())-start}s")
