@@ -6,15 +6,15 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from typing import Tuple
-from signal import signal, SIGPIPE, SIG_DFL
+from signal import signal, SIGPIPE, SIGINT, SIG_DFL
 
 
 def exit_handler(signal, frame):
     print("\nKeyboard Interrupt, program exiting gracefully")
     sys.exit(0)
 
-signal(signal.SIGINT, exit_handler)
-signal(SIGPIPE,SIG_DFL) # Ignore broken pipe
+signal(SIGINT, exit_handler)
+signal(SIGPIPE, SIG_DFL) # Ignore broken pipe
 def create_folders() -> None:
     Path("./outputs/csvs").mkdir(parents=True, exist_ok=True)
     Path("./outputs/images").mkdir(parents=True, exist_ok=True)
