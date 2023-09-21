@@ -2,6 +2,8 @@ import os, re, datetime, time, argparse
 import imageio as io
 from pathlib import Path
 
+# Monet knows how to turn a series of images into a GIF
+
 def create_folders() -> None:
     Path("./outputs/gifs").mkdir(parents=True, exist_ok=True)
 

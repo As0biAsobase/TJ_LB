@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 from typing import Tuple
 from signal import signal, SIGPIPE, SIGINT, SIG_DFL
 
+from goya import draw_the_book
 
 def exit_handler(signal, frame):
     print("\nKeyboard Interrupt, program exiting gracefully")
@@ -33,7 +34,8 @@ def load_pair(address: str):
 
     return contract
 
-def get_decimals(address) -> int:
+# This function returns necessary information about a token, such as decimals and symbol
+def get_token_data(address) -> int:
     address = Web3.to_checksum_address(address)
     abi=requests.get(f"https://api.snowtrace.io/api?module=contract&action=getabi&address={address}").json()['result']
     contract = w3.eth.contract(address=address, abi=abi)
@@ -45,7 +47,7 @@ def get_decimals(address) -> int:
         abi=requests.get(f"https://api.snowtrace.io/api?module=contract&action=getabi&address={Web3.to_checksum_address(impl_address)}").json()['result']
         contract = w3.eth.contract(address=address, abi=abi)
 
-    return contract.functions.decimals().call()
+    return {"decimals" : contract.functions.decimals().call(), "symbol" : contract.functions.symbol().call()}
 
 def get_tokens() -> Tuple[str, str]:
     tokenX = contract.functions.getTokenX().call()
@@ -127,37 +129,6 @@ def process_data(data: list, timestamp: int, min: int = 7, max: int = 12, tokenX
 
     return df
 
-def draw_the_book(df: pd.DataFrame, timestamp: int, active_bin: int) -> None:
-    tick_gap = 10
-
-    tokenX_symbol = "AVAX"
-    tokenY_symbol = "USDC"
-    dt = datetime.datetime.utcfromtimestamp(timestamp)
-    label = f"{tokenX_symbol}-{tokenY_symbol} pair on {dt:%Y-%m-%d %H:%M:%S}"
-
-    xticks = df.bin_id[::tick_gap]
-    xtick_lables = df.bin_price[::tick_gap]
-    yticks = [i*10_000 for i in range(0, 21)]
-
-    fig, ax = plt.subplots()
-
-    ax.bar(list(df.bin_id), list(df.reserveY), label=tokenY_symbol, color='b', edgecolor="none")
-    ax.bar(list(df.bin_id), list(df.reserveX_in_Y), bottom=np.array(df.reserveY, dtype=float), label=tokenX_symbol, color='r', edgecolor="none")
-
-    ax.set_ylabel('Reserves ($)')
-    ax.set_xlabel('Price ($)')
-    ax.set_title(label)
-    ax.legend()
-
-    ax.ticklabel_format(style='plain', useOffset=False)
-    fig.set_size_inches(18.5, 10.5, forward=True)
-    ax.set_xticks(xticks)
-    ax.set_xticklabels(np.round(xtick_lables, 4), rotation=90)
-    ax.set_yticks(yticks)
-    ax.axvline(x=active_bin, color='red', linestyle='--', label='Current Price')
-
-    plt.savefig(f'outputs/images/lb_avax_usdc_{timestamp}.png')
-
 if __name__ == "__main__":
     global contract
 
@@ -177,9 +148,11 @@ if __name__ == "__main__":
 
     # Need to delay before calling get_decimals otherwise, API gets rete limited
     time.sleep(5)
-    decimalsX = get_decimals(tokenX)
+    tokenX_data = get_token_data(tokenX)
+    decimalsX, symbolX = tokenX_data["decimals"], tokenX_data["symbol"]
     time.sleep(5)
-    decimalsY = get_decimals(tokenY)
+    tokenY_data = get_token_data(tokenY)
+    decimalsY, symbolY = tokenY_data["decimals"], tokenY_data["symbol"]
 
     if one_shot: print("Running in one-shot mode")
     else: print("Main loop started, snaphoting every 15 minutes")
@@ -194,7 +167,7 @@ if __name__ == "__main__":
                 data = get_liquidity_shape_parallel(target_bins)
 
                 df = process_data(data, timestamp, tokenX_decimals=decimalsX, tokenY_decimals=decimalsY)
-                draw_the_book(df, timestamp, active_bin)
+                draw_the_book(df, timestamp, active_bin, symbolX, symbolY)
                 
                 print(f"Snaphot - {timestamp} completed in {int(time.time())-start}s")
                 logging.info(f"{datetime.datetime.utcnow()}: Snaphot - {timestamp} completed in {int(time.time())-start}s")
