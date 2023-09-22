@@ -15,7 +15,7 @@ def exit_handler(signal, frame):
     sys.exit(0)
 
 signal(SIGINT, exit_handler)
-signal(SIGPIPE, SIG_DFL) # Ignore broken pipe
+# signal(SIGPIPE, SIG_DFL) # Ignore broken pipe
 def create_folders() -> None:
     Path("./outputs/csvs").mkdir(parents=True, exist_ok=True)
     Path("./outputs/images").mkdir(parents=True, exist_ok=True)
@@ -142,7 +142,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     one_shot = args.oneshot
     address = args.address
-    interval = args.interval
+    interval = int(args.interval)
 
     print("Starting the execution...")
     contract = load_pair(address)
