@@ -1,4 +1,4 @@
-import os, sys, multiprocessing, requests, argparse, logging, json
+import os, sys, concurrent, requests, argparse, logging, json
 import time, datetime
 from pathlib import Path
 from web3 import Web3
@@ -107,8 +107,8 @@ def process_bin(bin):
 def get_liquidity_shape_parallel(target_bins: list) -> list:
     corecount = os.cpu_count()
     print(f"Getting liquidity shape, using {corecount} threads")
-    with multiprocessing.Pool(processes=corecount) as pool:
-        results = pool.map(process_bin, target_bins)
+    with concurrent.futures.ProcessPoolExecutor(max_workers=corecount) as executor:
+        results = executor.map(process_bin, target_bins)
 
     return results
 
@@ -139,12 +139,17 @@ if __name__ == "__main__":
     parser.add_argument("--oneshot", help="Create a one-shot snapshot of liquidity and exit", action="store_true")
     parser.add_argument("--address", help="Address of the LP pair", default="0xD446eb1660F766d533BeCeEf890Df7A69d26f7d1")
     parser.add_argument("--interval", help="Time interval in minutes between snapshots", default=15)
+    parser.add_argument("--parallel", help="Run in parallel", action="store_false")
     args = parser.parse_args()
     one_shot = args.oneshot
     address = args.address
     interval = int(args.interval)
+    parallel = args.parallel
 
     print("Starting the execution...")
+    if parallel: print("Will execute code in parallel")
+    else: print("Not optimising for performance")
+
     contract = load_pair(address)
     tokenX, tokenY = get_tokens()
 
@@ -166,7 +171,7 @@ if __name__ == "__main__":
                 target_bins, active_bin = get_target_bins()
 
                 start = int(time.time())
-                data = get_liquidity_shape_parallel(target_bins)
+                data = get_liquidity_shape_parallel(target_bins) if parallel else get_liquidity_shape(target_bins)
 
                 df = process_data(data, timestamp, tokenX_decimals=decimalsX, tokenY_decimals=decimalsY)
                 draw_the_book(df, timestamp, active_bin, symbolX, symbolY)
