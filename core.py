@@ -138,9 +138,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--oneshot", help="Create a one-shot snapshot of liquidity and exit", action="store_true")
     parser.add_argument("--address", help="Address of the LP pair", default="0xD446eb1660F766d533BeCeEf890Df7A69d26f7d1")
+    parser.add_argument("--interval", help="Time interval in minutes between snapshots", default=15)
     args = parser.parse_args()
     one_shot = args.oneshot
     address = args.address
+    interval = args.interval
 
     print("Starting the execution...")
     contract = load_pair(address)
@@ -155,10 +157,10 @@ if __name__ == "__main__":
     decimalsY, symbolY = tokenY_data["decimals"], tokenY_data["symbol"]
 
     if one_shot: print("Running in one-shot mode")
-    else: print("Main loop started, snaphoting every 15 minutes")
+    else: print(f"Main loop started, snaphoting every {interval} minutes")
     
     while True:
-        if (time.localtime().tm_min % 15 == 0 and time.localtime().tm_sec == 0) or one_shot == True:
+        if (time.localtime().tm_min % interval == 0 and time.localtime().tm_sec == 0) or one_shot == True:
             try:
                 timestamp = int(time.time())
                 target_bins, active_bin = get_target_bins()
