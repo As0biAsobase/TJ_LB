@@ -31,7 +31,8 @@ def draw_the_book(df: pd.DataFrame, timestamp: int, active_bin: int, symbolX: st
     ax.set_yticks(yticks)
     ax.axvline(x=active_bin, color='red', linestyle='--', label='Current Price')
 
-    plt.savefig(f'outputs/images/lb_avax_usdc_{timestamp}.png')
+    plt.savefig(f'outputs/images/lb_{symbolX.lower()}_{symbolY.lower()}_{timestamp}.png')
+    print(f"Saved image to outputs/images/lb_{symbolX.lower()}_{symbolY.lower()}_{timestamp}.png")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

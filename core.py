@@ -101,7 +101,6 @@ def process_bin(bin):
     bin_step = 0.002
     reserveX, reserveY = contract.functions.getBin(bin).call()
     bin_price = (1+bin_step)**(bin-2**23)
-    print(f"Processing {bin}", end="\r")
     return {"bin_id" : bin, "reserveX" : reserveX, "reserveY" : reserveY, "bin_price" : bin_price}
 
 def get_liquidity_shape_parallel(target_bins: list) -> list:
@@ -133,7 +132,7 @@ if __name__ == "__main__":
     global contract
 
     create_folders()
-    logging.basicConfig(filename='./logs/nestor_core.log', level=logging.INFO)
+    logging.basicConfig(filename='./logs/core.log', level=logging.INFO)
     
     parser = argparse.ArgumentParser()
     parser.add_argument("--oneshot", help="Create a one-shot snapshot of liquidity and exit", action="store_true")
@@ -146,8 +145,8 @@ if __name__ == "__main__":
     interval = int(args.interval)
     parallel = args.parallel
 
-    print("Starting the execution...")
-    if parallel: print("Will execute code in parallel")
+    print(f"{datetime.datetime.utcnow()}: Starting the execution...")
+    if parallel: print(f"Will execute code in parallel")
     else: print("Not optimising for performance")
 
     contract = load_pair(address)
@@ -162,7 +161,7 @@ if __name__ == "__main__":
     decimalsY, symbolY = tokenY_data["decimals"], tokenY_data["symbol"]
 
     if one_shot: print("Running in one-shot mode")
-    else: print(f"Main loop started, snaphoting every {interval} minutes")
+    else: print(f"{datetime.datetime.utcnow()}: Main loop started, snaphoting every {interval} minutes")
     
     while True:
         if (time.localtime().tm_min % interval == 0 and time.localtime().tm_sec == 0) or one_shot == True:
@@ -183,4 +182,5 @@ if __name__ == "__main__":
                 time.sleep(1)
             if one_shot: break
         time.sleep(0.1)
+    print(f"{datetime.datetime.utcnow()}: Execution completed, exiting...")
 
