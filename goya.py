@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # Goya knows how to turn a Liquidity Book snapshot into a png
-def draw_the_book(df: pd.DataFrame, timestamp: int, active_bin: int, symbolX: str, symbolY: str) -> None:
+def draw_the_book(df: pd.DataFrame, timestamp: int, active_bin: int, symbolX: str, symbolY: str, height: int = 21) -> None:
     tick_gap = 10
 
     dt = datetime.datetime.utcfromtimestamp(timestamp)
@@ -12,7 +12,7 @@ def draw_the_book(df: pd.DataFrame, timestamp: int, active_bin: int, symbolX: st
 
     xticks = df.bin_id[::tick_gap]
     xtick_lables = df.bin_price[::tick_gap]
-    yticks = [i*10_000 for i in range(0, 21)]
+    yticks = [i*10_000 for i in range(0, height)]
 
     fig, ax = plt.subplots()
 

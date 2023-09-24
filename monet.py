@@ -2,10 +2,18 @@ import os, re, datetime, time, argparse
 import imageio as io
 from pathlib import Path
 
+from goya import draw_the_book
+
 # Monet knows how to turn a series of images into a GIF
 
 def create_folders() -> None:
     Path("./outputs/gifs").mkdir(parents=True, exist_ok=True)
+
+def load_csvs(path: str) -> list:
+    pass
+
+def generate_images(csvs: list, start_time: int, end_time: int) -> None:
+    pass
 
 def load_images(dir: str, start_time: int, end_time: int) -> list:
     images = []
@@ -39,12 +47,19 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--begin", help="Beginning of the time interval for images generated", type=int, default=unix_week_ago)
     parser.add_argument("--end", help="End of the time interval for images generated", type=int, default=unix_now)
+    parser.add_argument("--days", help="Number of days to look back, overrides --begin and --end", type=int, default=None)
     parser.add_argument("--fps", help="Frames per second for a gif", type=int, default=10)
     parser.add_argument("--ram", help="Optimise the memory usage", action="store_true")
+    parser.add_argument("--redraw", help="Regenerate images from csv files", action="store_true")
     args = parser.parse_args()
-    from_time, to_time = args.begin, args.end
+
+    from_time, to_time, days = args.begin, args.end, args.days
     ram_optimized = args.ram
     duration = 1000 * (1/args.fps)
+
+    if days != None:
+        to_time = int(time.mktime(utc_now.timetuple()))
+        from_time = to_time - 86_400 * days
 
     create_folders()
 
