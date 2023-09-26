@@ -1,4 +1,4 @@
-import datetime, argparse, time
+import datetime, argparse, time, re, os
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
@@ -33,6 +33,11 @@ def draw_the_book(df: pd.DataFrame, timestamp: int, active_bin: int, symbolX: st
 
     plt.savefig(f'outputs/images/lb_{symbolX.lower()}_{symbolY.lower()}_{timestamp}.png')
     print(f"Saved image to outputs/images/lb_{symbolX.lower()}_{symbolY.lower()}_{timestamp}.png")
+
+def draw_the_graph(csvs: list, start_time: int, end_time: int) -> None:
+    graphs = []
+
+    pass
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
