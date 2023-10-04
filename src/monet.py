@@ -3,7 +3,7 @@ import imageio as io
 from pathlib import Path
 from signal import signal, SIGINT
 
-from goya import draw_the_book
+from src.goya import draw_the_book
 
 # Monet knows how to turn a series of images into a GIF
 def exit_handler(signal, frame):
@@ -13,7 +13,7 @@ def exit_handler(signal, frame):
 signal(SIGINT, exit_handler)
 
 def create_folders() -> None:
-    Path("./outputs/gifs").mkdir(parents=True, exist_ok=True)
+    Path("../outputs/gifs").mkdir(parents=True, exist_ok=True)
 
 def get_csvs(path: str, start_time: int, end_time: int, skip: int) -> list:
     csvs = []

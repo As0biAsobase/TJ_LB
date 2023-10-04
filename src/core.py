@@ -17,9 +17,9 @@ def exit_handler(signal, frame):
 signal(SIGINT, exit_handler)
 # signal(SIGPIPE, SIG_DFL) # Ignore broken pipe
 def create_folders() -> None:
-    Path("./outputs/csvs").mkdir(parents=True, exist_ok=True)
-    Path("./outputs/images").mkdir(parents=True, exist_ok=True)
-    Path("./logs").mkdir(parents=True, exist_ok=True)
+    Path("../outputs/csvs").mkdir(parents=True, exist_ok=True)
+    Path("../outputs/images").mkdir(parents=True, exist_ok=True)
+    Path("../logs").mkdir(parents=True, exist_ok=True)
 
 def load_pair(address: str):
     global w3
@@ -132,7 +132,7 @@ if __name__ == "__main__":
     global contract
 
     create_folders()
-    logging.basicConfig(filename='./logs/core.log', level=logging.INFO)
+    logging.basicConfig(filename='../logs/core.log', level=logging.INFO)
     
     parser = argparse.ArgumentParser()
     parser.add_argument("--oneshot", help="Create a one-shot snapshot of liquidity and exit", action="store_true")
