@@ -36,11 +36,11 @@ def load_images(dir: str, start_time: int, end_time: int, skip: int) -> list:
     return images[::skip]
 
 def generate_gif(images: list, start_time: int, end_time: int, fps: int, loop: bool) -> None:
-    io.v2.mimwrite('./outputs/gifs/output.gif', images, format='GIF-PIL', fps=fps, loop=loop)
+    io.v2.mimwrite('./outputs/gifs/output.gif', images, format='GIF-PIL', fps=fps, loop=loop, subrectangles=True)
 
 # In some situations we don't want to load all images into RAM at once
 def memory_optimised_gif(dir: str, start_time: int, end_time: int, fps: int, loop: bool) -> None:
-    with io.v2.get_writer('./outputs/gifs/output.gif', format='GIF-PIL', fps=fps, loop=loop) as writer:
+    with io.v2.get_writer('./outputs/gifs/output.gif', format='GIF-PIL', fps=fps, loop=loop, subrectangles=True) as writer:
         for file_name in sorted(os.listdir(dir)):
             time = int(re.search("\d+", file_name).group(0))
             if time > start_time and time < end_time:
